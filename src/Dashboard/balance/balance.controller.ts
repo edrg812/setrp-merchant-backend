@@ -5,13 +5,21 @@ import {
   Patch,
   Param,
   Body,
+  Delete,
 } from '@nestjs/common';
 import { BalanceService } from './balance.service';
 import { CreateBalanceDto } from './dto/create-balance.dto';
 import { UseGuards } from '@nestjs/common';
-import { JwtAuthGuard } from 'src/User/jwt-auth.guard';
+import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
+import { AuthGuard } from '@nestjs/passport/dist/auth.guard';
+import { Permissions } from '../../auth/permissions.decorator';
+import { RbacGuard } from '../../auth/rbac.guard';
 
+
+
+// @UseGuards(AuthGuard('jwt'), PermissionsGuard)
 @Controller('balance')
+@UseGuards(JwtAuthGuard, RbacGuard, )
 export class BalanceController {
   constructor(private readonly balanceService: BalanceService) {}
 
@@ -22,7 +30,8 @@ export class BalanceController {
   }
 
   // GET all balances
-  @UseGuards(JwtAuthGuard)
+ 
+  @Permissions('balance.read')
   @Get()
   findAll() {
     return this.balanceService.findAll();
@@ -41,6 +50,12 @@ export class BalanceController {
     @Body() dto: Partial<CreateBalanceDto>,
   ) {
     return this.balanceService.update(currency.toUpperCase(), dto);
+  }
+
+
+  @Delete(':currency')
+  remove(@Param('currency') currency: string) {
+    return this.balanceService.remove(currency.toUpperCase());
   }
 }
 

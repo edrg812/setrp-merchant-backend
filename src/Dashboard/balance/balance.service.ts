@@ -35,4 +35,11 @@ export class BalanceService {
       data: dto,
     });
   }
+
+  async remove(currency: string) {
+    const item = await this.findByCurrency(currency);
+    return this.prisma.balanceOverview.delete({
+      where: { id: item.id },
+    });
+  }
 }

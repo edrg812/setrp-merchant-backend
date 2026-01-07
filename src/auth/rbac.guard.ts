@@ -3,6 +3,7 @@ import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PERMISSIONS_KEY } from '../auth/permissions.decorator';
 import { PermissionsCacheService } from './permissions-cache.service';
+import { ForbiddenException } from '@nestjs/common';
 
 
 @Injectable()
@@ -23,13 +24,17 @@ export class RbacGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const user = request.user;
 
-    if (!user?.userId) return false;
+    if (!user?.userId) {
+      throw new ForbiddenException('User not authenticated');
+    };
 console.log('User ID:', user.userId);
 console.log('Required Permissions:', requiredPermissions);
     const cachedPermissions =
       await this.permissionsCache.getUserPermissions(user.userId);
 
-    if (!cachedPermissions?.length) return false;
+    if (!cachedPermissions?.length) {
+      throw new ForbiddenException('No permissions found for user');
+    };
 
     return requiredPermissions.every(p =>
       cachedPermissions.includes(p),

@@ -1,66 +1,8 @@
-// import { Injectable, UnauthorizedException } from '@nestjs/common';
-// import { PrismaService } from '../prisma.service';
-// import { CreateUserDto } from './dto/create-user.dto';
-// import { LoginUserDto } from './dto/login-user.dto';
-// import * as bcrypt from 'bcrypt';
-// import * as jwt from 'jsonwebtoken';
-
-
-// @Injectable()
-// export class AuthService {
-//   constructor(private prisma: PrismaService) {}
-
-//   async register(dto: CreateUserDto) {
-//     const hashed = await bcrypt.hash(dto.password, 10);
-//     const user = await this.prisma.user.create({
-//       data: { ...dto, password: hashed },
-//     });
-
-//     const token = this.signToken(user.id, user.email);
-//     return { user: { id: user.id, email: user.email, name: user.name }, token };
-//   }
-
-//   async login(dto: LoginUserDto) {
-//     const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
-//     if (!user) throw new UnauthorizedException('Invalid credentials');
-
-//     const valid = await bcrypt.compare(dto.password, user.password);
-//     if (!valid) throw new UnauthorizedException('Invalid credentials');
-
-//     const token = this.signToken(user.id, user.email);
-//     return { user: { id: user.id, email: user.email, name: user.name }, token };
-//   }
-
-//   async logout() {
-//     // For JWT, client just deletes the token
-//     return { message: 'Logged out successfully' };
-//   }
-
-//   private signToken(userId: number, email: string) {
-//     return jwt.sign({ sub: userId, email }, process.env.JWT_SECRET || 'secret', {
-//       expiresIn: '1d',
-//     });
-//   }
-// }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 import {
   Injectable,
   UnauthorizedException,
   BadRequestException,
+  ForbiddenException,
   Logger,
   Inject,
 } from '@nestjs/common';
@@ -70,9 +12,7 @@ import { LoginUserDto } from './dto/login-user.dto';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
-// import { Cache } from 'cache-manager';
 import type { Cache } from 'cache-manager';
-
 import { randomUUID } from 'crypto';
 
 @Injectable()
@@ -98,7 +38,7 @@ export class AuthService {
     });
   }
 
-  // ================= REGISTER =================
+  // ================= REGISTER (BASIC, NON-MERCHANT) =================
   async register(dto: CreateUserDto) {
     try {
       const hashed = await bcrypt.hash(dto.password, 10);
@@ -108,7 +48,11 @@ export class AuthService {
           email: dto.email,
           password: hashed,
           name: dto.name,
-          role: 'user', // default role
+          role: 'user',
+          status: 'ACTIVE',
+          // company: {
+          //   connect: { id: companyId },
+          // },
         },
       });
 
@@ -122,7 +66,7 @@ export class AuthService {
       await this.cache.set(
         `refresh:${user.id}`,
         refreshToken,
-        60 * 60 * 24 * 7, // 7 days
+        60 * 60 * 24 * 7,
       );
 
       return {
@@ -149,12 +93,27 @@ export class AuthService {
   async login(dto: LoginUserDto) {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
+      include: {
+        company: true, // ✅ REQUIRED
+      },
     });
 
-    if (!user) throw new UnauthorizedException('Invalid credentials');
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    if (user.status !== 'ACTIVE') {
+      throw new UnauthorizedException('Account not active');
+    }
+
+    if (user.company && user.company.status !== 'ACTIVE') {
+      throw new ForbiddenException('Company not approved');
+    }
 
     const valid = await bcrypt.compare(dto.password, user.password);
-    if (!valid) throw new UnauthorizedException('Invalid credentials');
+    if (!valid) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
 
     const accessToken = await this.signToken(
       user.id,
@@ -175,6 +134,7 @@ export class AuthService {
         email: user.email,
         name: user.name,
         role: user.role,
+        companyId: user.companyId,
       },
       accessToken,
       refreshToken,
@@ -184,8 +144,53 @@ export class AuthService {
   // ================= LOGOUT =================
   async logout(userId: number) {
     await this.cache.del(`refresh:${userId}`);
+    return { message: 'Logged out successfully' };
+  }
+
+  // ================= ACCEPT INVITE =================
+  async acceptInvite(token: string, password: string) {
+    const invite = await this.prisma.userInvite.findUnique({
+      where: { token },
+    });
+
+    if (!invite) {
+      throw new BadRequestException('Invalid or expired invite');
+    }
+
+    const hashed = await bcrypt.hash(password, 10);
+
+    const user = await this.prisma.user.create({
+      data: {
+        email: invite.email,
+        password: hashed,
+        companyId: invite.companyId,
+        status: 'ACTIVE',
+      },
+    });
+
+    const role = await this.prisma.role.findUnique({
+      where: { name: invite.role },
+    });
+
+    if (role) {
+      await this.prisma.userRole.create({
+        data: {
+          userId: user.id,
+          roleId: role.id,
+        },
+      });
+    }
+
+    await this.prisma.userInvite.delete({
+      where: { id: invite.id },
+    });
+
     return {
-      message: 'Logged out successfully',
+      message: 'Account created successfully',
     };
   }
 }
+
+
+
+

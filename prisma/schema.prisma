@@ -1,3 +1,224 @@
+// generator client {
+//   provider = "prisma-client-js"
+// }
+
+// datasource db {
+//   provider = "sqlite"
+//   url      = env("DATABASE_URL")
+// }
+
+// /* =========================
+//    APPLICATION (Landing Page)
+// ========================= */
+
+// enum ApplicationStatus {
+//   SUBMITTED
+//   UNDER_REVIEW
+//   APPROVED
+//   REJECTED
+// }
+
+// model Application {
+//   id   Int   @id @default(autoincrement())
+
+//   // business info
+//   registered_business_name String
+//   dba                      String?
+//   type_of_business         String
+//   legal_identity           String
+//   mobile_phone             String
+//   business_email           String
+//   what_are_selling         String
+
+//   // contact person
+//   full_name                String
+//   designation              String
+//   mobile                   String
+//   email                    String
+
+//   // technical contact
+//   full_name_technical      String
+//   designation_technical    String
+//   mobile_technical         String
+//   email_technical          String
+
+//   // technical info
+//   website_url              String
+//   hosting_server_ip        String
+
+//   // plan
+//   plan                     String
+
+//   // documents
+//   business_logo            String?
+//   trade_license            String?
+//   id_front                 String
+//   id_back                  String?
+//   tin_certificate          String
+
+//   status                   ApplicationStatus @default(SUBMITTED)
+//   reviewedAt               DateTime?
+//   rejectionReason          String?
+
+//   createdAt DateTime @default(now())
+
+//   company Company?
+// }
+
+// /* =========================
+//    COMPANY (Tenant Root)
+// ========================= */
+
+// enum CompanyStatus {
+//   PENDING
+//   ACTIVE
+//   SUSPENDED
+//   REJECTED
+// }
+
+// model Company {
+//   id             String   @id @default(uuid())
+
+//   legal_name     String
+//   dba_name       String?
+//   business_type  String
+//   legal_identity String
+
+//   applicationId  Int   @unique
+//   status         CompanyStatus @default(PENDING)
+
+//   createdAt DateTime @default(now())
+//   approvedAt DateTime?
+
+//   application Application @relation(fields: [applicationId], references: [id])
+
+//   users     User[]
+//   balances  BalanceOverview[]
+//   apiKeys   ApiKey[]
+// }
+
+// /* =========================
+//    USERS & INVITES
+// ========================= */
+
+// enum UserStatus {
+//   INVITED
+//   ACTIVE
+//   DISABLED
+// }
+
+// model User {
+//   id        Int        @id @default(autoincrement())
+//   email     String     @unique
+//   password  String
+//   name      String?
+//   status    UserStatus @default(INVITED)
+
+//   companyId String
+//   company   Company @relation(fields: [companyId], references: [id])
+
+//   roles     UserRole[]
+
+//   createdAt DateTime @default(now())
+//   updatedAt DateTime @updatedAt
+// }
+
+// model UserInvite {
+//   id        Int      @id @default(autoincrement())
+//   email     String
+//   companyId String
+//   roleName  String
+//   token     String   @unique
+//   expiresAt DateTime
+//   acceptedAt DateTime?
+
+//   createdAt DateTime @default(now())
+
+//   company Company @relation(fields: [companyId], references: [id])
+// }
+
+// /* =========================
+//    RBAC (Global, reusable)
+// ========================= */
+
+// model Role {
+//   id          Int              @id @default(autoincrement())
+//   name        String           @unique
+//   permissions RolePermission[]
+//   users       UserRole[]
+// }
+
+// model Permission {
+//   id    Int    @id @default(autoincrement())
+//   code  String @unique // balance.read, api.create, user.invite
+//   roles RolePermission[]
+// }
+
+// model UserRole {
+//   userId Int
+//   roleId Int
+
+//   user User @relation(fields: [userId], references: [id])
+//   role Role @relation(fields: [roleId], references: [id])
+
+//   @@id([userId, roleId])
+// }
+
+// model RolePermission {
+//   roleId       Int
+//   permissionId Int
+
+//   role       Role       @relation(fields: [roleId], references: [id])
+//   permission Permission @relation(fields: [permissionId], references: [id])
+
+//   @@id([roleId, permissionId])
+// }
+
+// /* =========================
+//    BALANCE
+// ========================= */
+
+// model BalanceOverview {
+//   id               Int    @id @default(autoincrement())
+//   companyId        String
+//   currency         String
+
+//   totalBalance     Float
+//   availableBalance Float
+//   holdingFunds     Float
+//   todaysRevenue    Float
+
+//   createdAt DateTime @default(now())
+//   updatedAt DateTime @updatedAt
+
+//   company Company @relation(fields: [companyId], references: [id])
+
+//   @@unique([companyId, currency])
+// }
+
+// /* =========================
+//    API KEYS
+// ========================= */
+
+// enum ApiKeyStatus {
+//   ACTIVE
+//   REVOKED
+//   EXPIRED
+// }
+
+// model ApiKey {
+//   id         Int      @id @default(autoincrement())
+//   companyId  String
+//   name       String
+//   keyHash    String
+//   status     ApiKeyStatus @default(ACTIVE)
+
+//   createdAt DateTime @default(now())
+//   lastUsedAt DateTime?
+
+//   company Company @relation(fields: [companyId], references: [id])
+// }
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,9 +228,112 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/**
+ * ===================== ENUMS =====================
+ */
+
+enum CompanyStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  REJECTED
+}
+
+enum UserStatus {
+  INVITED
+  ACTIVE
+  DISABLED
+}
+
+enum ApiKeyStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+/**
+ * ===================== COMPANY =====================
+ */
+
+model Company {
+  id             String  @id @default(uuid())
+  legal_name     String
+  dba_name       String?
+  business_type  String
+  legal_identity String
+
+  application_id Int           @unique
+  status         CompanyStatus @default(PENDING)
+
+  createdAt  DateTime  @default(now())
+  approvedAt DateTime?
+
+  /**
+   * relations
+   */
+  users       User[]
+  balances    BalanceOverview[]
+  apiKeys     ApiKey[]
+  userInvites UserInvite[] // ✅ REQUIRED (FIX)
+}
+
+/**
+ * ===================== USERS =====================
+ */
+
+model User {
+  id       Int     @id @default(autoincrement())
+  email    String  @unique
+  password String
+  name     String?
+  isActive Boolean @default(true)
+
+  role   String     @default("user") // fallback role
+  status UserStatus @default(ACTIVE)
+
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
+
+  roles UserRole[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+
+    // 💰 TRANSACTIONS
+  transactions Transaction[]
+  ledger       Ledger[]
+}
+
+/**
+ * ===================== USER INVITES =====================
+ */
+
+model UserInvite {
+  id     Int        @id @default(autoincrement())
+  email  String
+  role   String
+  token  String     @unique
+  status UserStatus @default(INVITED)
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@unique([email, companyId])
+}
+
+/**
+ * ===================== BALANCE =====================
+ */
+
 model BalanceOverview {
-  id               Int    @id @default(autoincrement())
-  currency         String // e.g. "BDT" or "USD"
+  id        Int    @id @default(autoincrement())
+  companyId String
+  currency  String
+
   totalBalance     Float
   availableBalance Float
   holdingFunds     Float
@@ -17,20 +341,15 @@ model BalanceOverview {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, currency])
 }
 
-model User {
-  id        Int        @id @default(autoincrement())
-  email     String     @unique
-  password  String
-  name      String?
-  isActive  Boolean    @default(true)
-  role      String   @default("user") // <-- must exist
-  roles     UserRole[]  // <-- add this
-
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-}
+/**
+ * ===================== RBAC =====================
+ */
 
 model Role {
   id          Int              @id @default(autoincrement())
@@ -41,7 +360,7 @@ model Role {
 
 model Permission {
   id    Int              @id @default(autoincrement())
-  code  String           @unique // balance.read, user.create
+  code  String           @unique
   roles RolePermission[]
 }
 
@@ -64,3 +383,106 @@ model RolePermission {
 
   @@id([roleId, permissionId])
 }
+
+/**
+ * ===================== API KEYS =====================
+ */
+
+model ApiKey {
+  id        Int          @id @default(autoincrement())
+  companyId String
+  name      String
+  keyHash   String
+  status    ApiKeyStatus @default(ACTIVE)
+
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+
+  company Company @relation(fields: [companyId], references: [id])
+}
+
+
+
+//transaction related models will be added later
+
+model Wallet {
+  id        String   @id @default(uuid())
+  ownerType String   // PLATFORM | MERCHANT
+  ownerId   String   // merchantId or platformId
+  currency  String   // BDT | USD
+  status    String   // ACTIVE | FROZEN
+  createdAt DateTime @default(now())
+
+  ledgerEntries Ledger[]
+
+  @@unique([ownerType, ownerId, currency])
+}
+
+
+
+
+
+
+model Transaction {
+  id            String   @id @default(uuid())
+  transactionId String   @unique
+  merchantId    String
+  walletId      String
+  amount        Decimal
+  currency      String   // BDT | USD
+  type          String   // CREDIT | DEBIT | REVERSAL
+  status        String
+  createdAt     DateTime @default(now())
+
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+  wallet   Wallet   @relation(fields: [walletId], references: [id])
+}
+
+
+model Ledger {
+  id           String   @id @default(uuid())
+  walletId     String
+  credit       Decimal  @default(0)
+  debit        Decimal  @default(0)
+  balanceAfter Decimal
+  referenceTxn String
+  createdAt    DateTime @default(now())
+
+  wallet Wallet @relation(fields: [walletId], references: [id])
+}
+
+// enum TransactionType {
+//   DEBIT
+//   CREDIT
+// }
+
+// enum TransactionStatus {
+//   PROCESSING
+//   SUCCESS
+//   FAILED
+// }
+
+// enum LedgerEntryType {
+//   DEBIT
+//   CREDIT
+// }
+
+
+
+
+
+
+// AuditLog (IMMUTABLE)
+
+model AuditLog {
+  id          Int      @id @default(autoincrement())
+  action      String
+  entityType  String
+  entityId    String
+  performedBy Int?     // admin/user/system
+  ipAddress   String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+}
+
+

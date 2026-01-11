@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { WebhookController } from './webhook.controller';
 import { WebhookService } from './webhook.service';
-import { TransactionService } from '../transactions/transaction.service';
+// import { TransactionService } from '../transactions/transaction.service';
 import { PrismaService } from '../prisma.service';
 import { WalletService } from '../wallet/wallet.service';
 import { LedgerService } from '../ledger/ledger.service';
@@ -10,7 +10,7 @@ import { LedgerService } from '../ledger/ledger.service';
   controllers: [WebhookController],
   providers: [
     WebhookService,
-    TransactionService,
+    // TransactionService,
     WalletService,
     LedgerService,
     PrismaService,

@@ -1,11 +1,11 @@
 import { Injectable, ForbiddenException } from '@nestjs/common';
-import { TransactionService } from '../transactions/transaction.service';
+// import { TransactionService } from '../transactions/transaction.service';
 import * as crypto from 'crypto';
 
 @Injectable()
 export class WebhookService {
   constructor(
-    private readonly transactionService: TransactionService,
+    // private readonly transactionService: TransactionService,
   ) {}
 
   async processPayment(payload: any, signature: string) {
